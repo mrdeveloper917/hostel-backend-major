@@ -96,93 +96,36 @@ message:error.message
 
 /* ================= LOGIN ================= */
 
-export const login = async (req,res)=>{
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-try{
+    console.log("LOGIN DATA:", email, password);
 
-const { email, password } = req.body || {};
+    const user = await User.findOne({ email });
 
-/* validation */
+    if (!user) {
+      console.log("User not found");
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-if(!email || !password){
+    console.log("DB PASSWORD:", user.password);
 
-return res.status(400).json({
-success:false,
-message:"Email and password required"
-});
+    const isMatch = await bcrypt.compare(password, user.password);
 
-}
+    console.log("MATCH:", isMatch);
 
-/* check user */
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-const user = await User.findOne({ email });
+    res.json({
+      message: "Login successful",
+      user,
+    });
 
-if(!user){
-
-return res.status(400).json({
-success:false,
-message:"Invalid credentials"
-});
-
-}
-
-/* password check */
-
-const isMatch = await bcrypt.compare(password,user.password);
-
-if(!isMatch){
-
-return res.status(400).json({
-success:false,
-message:"Invalid credentials"
-});
-
-}
-
-/* jwt token */
-
-const token = jwt.sign(
-
-{
-id:user._id,
-role:user.role
-},
-
-process.env.JWT_SECRET,
-
-{
-expiresIn:"7d"
-}
-
-);
-
-/* response */
-
-res.status(200).json({
-
-success:true,
-message:"Login successful",
-
-token,
-
-user:{
-id:user._id,
-name:user.name,
-email:user.email,
-role:user.role
-}
-
-});
-
-}catch(error){
-
-console.error("LOGIN ERROR:",error);
-
-res.status(500).json({
-success:false,
-message:"Server Error"
-});
-
-}
-
+  } catch (error) {
+    console.log("LOGIN ERROR:", error);
+    res.status(500).json({ message: "Login failed" });
+  }
 };
