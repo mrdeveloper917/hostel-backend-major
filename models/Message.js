@@ -1,23 +1,25 @@
 import mongoose from "mongoose";
 
-const messageSchema = new mongoose.Schema(
-    {
-        senderId: {
-            type: String,
-            required: true,
-        },
-        receiverId: {
-            type: String,
-            required: true,
-        },
-        message: {
-            type: String,
-            required: true,
-        },
-    },
-    { timestamps: true }
-);
+const messageSchema = new mongoose.Schema({
+  senderId: String,
+  receiverId: String,
+  message: String,
 
-messageSchema.index({ senderId: 1, receiverId: 1, createdAt: 1 });
+  status: {
+    type: String,
+    enum: ["sent", "delivered", "seen"],
+    default: "sent",
+  },
+
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
 export default mongoose.model("Message", messageSchema);
