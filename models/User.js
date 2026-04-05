@@ -20,4 +20,7 @@ ref: "Room",
 { timestamps: true }
 );
 
+userSchema.index({ role: 1 });
+userSchema.index({ room: 1 });
+
 export default mongoose.model("User", userSchema);

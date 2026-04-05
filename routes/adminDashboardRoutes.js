@@ -9,29 +9,25 @@ const router = express.Router();
 
 router.get("/", protect, adminOnly, async (req, res) => {
     try {
-        const totalStudents = await User.countDocuments({ role: "student" });
-        const totalRooms = await Room.countDocuments();
-
-        const pendingComplaints = await Complaint.countDocuments({
-            status: "pending",
-        });
-
-        const inProgressComplaints = await Complaint.countDocuments({
-            status: "in-progress",
-        });
-
-        const resolvedComplaints = await Complaint.countDocuments({
-            status: "resolved",
-        });
-
         const currentMonth = new Date().toISOString().slice(0, 7);
-
-        const monthlyFees = await Fee.find({ month: currentMonth });
-
-        const totalRevenue = monthlyFees.reduce(
-            (sum, fee) => sum + fee.paidAmount,
-            0
-        );
+        const [
+            totalStudents,
+            totalRooms,
+            pendingComplaints,
+            inProgressComplaints,
+            resolvedComplaints,
+            monthlyRevenue,
+        ] = await Promise.all([
+            User.countDocuments({ role: "student" }),
+            Room.countDocuments(),
+            Complaint.countDocuments({ status: "pending" }),
+            Complaint.countDocuments({ status: "in-progress" }),
+            Complaint.countDocuments({ status: "resolved" }),
+            Fee.aggregate([
+                { $match: { month: currentMonth } },
+                { $group: { _id: null, totalRevenue: { $sum: "$paidAmount" } } },
+            ]),
+        ]);
 
         res.json({
             admin: {
@@ -46,7 +42,7 @@ router.get("/", protect, adminOnly, async (req, res) => {
                 inProgress: inProgressComplaints,
                 resolved: resolvedComplaints,
             },
-            revenue: totalRevenue,
+            revenue: monthlyRevenue[0]?.totalRevenue || 0,
         });
     } catch (error) {
         res.status(500).json({ message: "Dashboard fetch failed" });

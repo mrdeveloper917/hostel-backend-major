@@ -1,5 +1,6 @@
 import express from "express";
 import Room from "../models/Room.js";
+import User from "../models/User.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -10,7 +11,7 @@ router.get("/", protect, adminOnly, async (req, res) => {
         const rooms = await Room.find().populate(
             "occupants",
             "name email"
-        );
+        ).lean();
 
         res.json({ rooms });
     } catch (error) {
@@ -21,9 +22,11 @@ router.get("/", protect, adminOnly, async (req, res) => {
 /* ================= GET MY ROOM (STUDENT) ================= */
 router.get("/my-room", protect, async (req, res) => {
     try {
-        const room = await Room.findOne({
-            occupants: req.user.id,
-        }).populate("occupants", "name email");
+        const room = req.user.room
+            ? await Room.findById(req.user.room)
+                  .populate("occupants", "name email")
+                  .lean()
+            : null;
 
         res.json({ room: room || null });
     } catch (error) {
@@ -200,9 +203,11 @@ router.post("/remove", protect, adminOnly, async (req, res) => {
 /* ================= GET MY ROOM ================= */
 router.get("/my", protect, async (req, res) => {
     try {
-        const room = await Room.findOne({
-            occupants: req.user.id,
-        }).populate("occupants", "name email");
+        const room = req.user.room
+            ? await Room.findById(req.user.room)
+                  .populate("occupants", "name email")
+                  .lean()
+            : null;
 
         res.json({ room: room || null });
     } catch (error) {

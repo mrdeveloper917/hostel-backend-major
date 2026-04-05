@@ -23,4 +23,8 @@ const roomChangeSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+roomChangeSchema.index({ studentId: 1, createdAt: -1 });
+roomChangeSchema.index({ status: 1, createdAt: -1 });
+roomChangeSchema.index({ preferredBlock: 1, preferredFloor: 1, status: 1 });
+
 export default mongoose.model("RoomChangeRequest", roomChangeSchema);

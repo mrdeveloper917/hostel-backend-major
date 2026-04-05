@@ -38,4 +38,8 @@ const roomSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+roomSchema.index({ block: 1, floor: 1, roomNumber: 1 }, { unique: true });
+roomSchema.index({ occupants: 1 });
+roomSchema.index({ status: 1 });
+
 export default mongoose.model("Room", roomSchema);

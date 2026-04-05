@@ -28,4 +28,7 @@ const leaveSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+leaveSchema.index({ student: 1, createdAt: -1 });
+leaveSchema.index({ status: 1, createdAt: -1 });
+
 export default mongoose.model("Leave", leaveSchema);

@@ -27,6 +27,9 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import roomChangeRoutes from "./routes/roomChangeRoutes.js";
 
+/* 🔥 IMPORT MESSAGE MODEL */
+import Message from "./models/Message.js";
+
 /* ================= APP INIT ================= */
 const app = express();
 
@@ -50,6 +53,25 @@ app.use("/api", announcementRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/room-change", roomChangeRoutes);
 
+/* ================= CHAT HISTORY API ================= */
+app.get("/api/messages/:receiverId", async (req, res) => {
+    try {
+        const userId = req.user?.id || req.headers.userid; // fallback
+        const { receiverId } = req.params;
+
+        const messages = await Message.find({
+            $or: [
+                { senderId: userId, receiverId },
+                { senderId: receiverId, receiverId: userId },
+            ],
+        }).sort({ createdAt: 1 });
+
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching messages" });
+    }
+});
+
 app.get("/", (req, res) => {
     res.send("Hostel Management Backend Running...");
 });
@@ -65,9 +87,10 @@ const io = new Server(server, {
     cors: { origin: "*" },
 });
 
-/* 🔐 Secure Socket Auth */
+/* 🔐 SOCKET AUTH (JWT) */
 io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
+
     if (!token) return next(new Error("Authentication error"));
 
     try {
@@ -79,14 +102,50 @@ io.use((socket, next) => {
     }
 });
 
+/* ================= SOCKET CONNECTION ================= */
 io.on("connection", (socket) => {
     console.log("User connected:", socket.userId);
 
+    // Join personal room
     socket.join(socket.userId);
+
+    /* 💬 SEND MESSAGE */
+    socket.on("sendMessage", async ({ receiverId, message }) => {
+        try {
+            const newMessage = new Message({
+                senderId: socket.userId,
+                receiverId,
+                message,
+            });
+
+            await newMessage.save();
+
+            // Send to receiver
+            io.to(receiverId).emit("receiveMessage", newMessage);
+
+            // Send back to sender (optional for sync)
+            socket.emit("messageSent", newMessage);
+
+        } catch (error) {
+            console.error("Message error:", error);
+        }
+    });
+
+    /* 🔵 TYPING INDICATOR */
+    socket.on("typing", ({ receiverId }) => {
+        socket.to(receiverId).emit("typing", {
+            senderId: socket.userId,
+        });
+    });
+
+    socket.on("stopTyping", ({ receiverId }) => {
+        socket.to(receiverId).emit("stopTyping");
+    });
 
     socket.on("disconnect", () => {
         console.log("User disconnected:", socket.userId);
     });
 });
 
+/* ================= MAKE IO GLOBAL ================= */
 app.set("io", io);

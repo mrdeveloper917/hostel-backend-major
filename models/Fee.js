@@ -37,4 +37,8 @@ const feeSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+feeSchema.index({ student: 1, month: 1 }, { unique: true });
+feeSchema.index({ month: 1 });
+feeSchema.index({ student: 1, createdAt: -1 });
+
 export default mongoose.model("Fee", feeSchema);

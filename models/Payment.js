@@ -18,4 +18,6 @@ const paymentSchema = new mongoose.Schema({
     },
 });
 
+paymentSchema.index({ student: 1, date: -1 });
+
 export default mongoose.model("Payment", paymentSchema);

@@ -12,28 +12,27 @@ const router = express.Router();
 ============================================================ */
 router.get("/dashboard", protect, async (req, res) => {
     try {
-        const student = await User.findById(req.user.id)
-            .select("-password")
-            .populate("room", "roomNumber floor block capacity");
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const [student, complaintCount, leaveCount, fee] = await Promise.all([
+            User.findById(req.user.id)
+                .select("name email room")
+                .populate("room", "roomNumber floor block capacity")
+                .lean(),
+            Complaint.countDocuments({
+                student: req.user.id,
+            }),
+            Leave.countDocuments({
+                student: req.user.id,
+            }),
+            Fee.findOne({
+                student: req.user.id,
+                month: currentMonth,
+            }).lean(),
+        ]);
 
         if (!student) {
             return res.status(404).json({ message: "Student not found" });
         }
-
-        const complaintCount = await Complaint.countDocuments({
-            student: req.user.id,
-        });
-
-        const leaveCount = await Leave.countDocuments({
-            student: req.user.id,
-        });
-
-        const currentMonth = new Date().toISOString().slice(0, 7);
-
-        const fee = await Fee.findOne({
-            student: req.user.id,
-            month: currentMonth,
-        });
 
         res.json({
             user: {
@@ -91,31 +90,49 @@ router.get("/:id/leaves", protect, adminOnly, async (req, res) => {
 router.get("/", protect, adminOnly, async (req, res) => {
     try {
         const students = await User.find({ role: "student" })
-            .select("-password")
-            .populate("room", "roomNumber floor block");
+            .select("name email role room createdAt updatedAt")
+            .populate("room", "roomNumber floor block")
+            .lean();
 
-        const formattedStudents = await Promise.all(
-            students.map(async (student) => {
-                const complaints = await Complaint.countDocuments({
-                    student: student._id,
-                });
+        const studentIds = students.map((student) => student._id);
 
-                const leaves = await Leave.countDocuments({
-                    student: student._id,
-                });
+        const [complaintCounts, leaveCounts, latestFees] = await Promise.all([
+            Complaint.aggregate([
+                { $match: { student: { $in: studentIds } } },
+                { $group: { _id: "$student", count: { $sum: 1 } } },
+            ]),
+            Leave.aggregate([
+                { $match: { student: { $in: studentIds } } },
+                { $group: { _id: "$student", count: { $sum: 1 } } },
+            ]),
+            Fee.aggregate([
+                { $match: { student: { $in: studentIds } } },
+                { $sort: { createdAt: -1 } },
+                {
+                    $group: {
+                        _id: "$student",
+                        status: { $first: "$status" },
+                    },
+                },
+            ]),
+        ]);
 
-                const fee = await Fee.findOne({
-                    student: student._id,
-                }).sort({ createdAt: -1 });
-
-                return {
-                    ...student._doc,
-                    complaints,
-                    leaves,
-                    feeStatus: fee?.status || "unpaid",
-                };
-            })
+        const complaintCountMap = new Map(
+            complaintCounts.map((item) => [item._id.toString(), item.count])
         );
+        const leaveCountMap = new Map(
+            leaveCounts.map((item) => [item._id.toString(), item.count])
+        );
+        const feeStatusMap = new Map(
+            latestFees.map((item) => [item._id.toString(), item.status])
+        );
+
+        const formattedStudents = students.map((student) => ({
+            ...student,
+            complaints: complaintCountMap.get(student._id.toString()) || 0,
+            leaves: leaveCountMap.get(student._id.toString()) || 0,
+            feeStatus: feeStatusMap.get(student._id.toString()) || "unpaid",
+        }));
 
         res.json({ students: formattedStudents });
     } catch (error) {
@@ -130,8 +147,9 @@ router.get("/", protect, adminOnly, async (req, res) => {
 router.get("/me", protect, async (req, res) => {
     try {
         const student = await User.findById(req.user.id)
-            .select("-password")
-            .populate("room", "roomNumber floor block");
+            .select("name email role room createdAt updatedAt")
+            .populate("room", "roomNumber floor block")
+            .lean();
 
         res.json({ student });
     } catch (error) {
