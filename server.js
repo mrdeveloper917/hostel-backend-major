@@ -87,6 +87,8 @@ const io = new Server(server, {
     cors: { origin: "*" },
 });
 
+const onlineUsers = new Set();
+
 /* 🔐 SOCKET AUTH (JWT) */
 io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
@@ -104,46 +106,92 @@ io.use((socket, next) => {
 
 /* ================= SOCKET CONNECTION ================= */
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.userId);
+    const userId = socket.userId;
+
+    console.log("User connected:", userId);
+
+    onlineUsers.add(userId);
+    io.emit("onlineUsers", Array.from(onlineUsers));
 
     // Join personal room
-    socket.join(socket.userId);
+    socket.join(userId);
 
     /* 💬 SEND MESSAGE */
     socket.on("sendMessage", async ({ receiverId, message }) => {
         try {
-            const newMessage = new Message({
-                senderId: socket.userId,
+            const msg = await Message.create({
+                senderId: userId,
                 receiverId,
                 message,
+                status: "delivered",
             });
 
-            await newMessage.save();
-
-            // Send to receiver
-            io.to(receiverId).emit("receiveMessage", newMessage);
-
-            // Send back to sender (optional for sync)
-            socket.emit("messageSent", newMessage);
-
+            io.to(receiverId).emit("receiveMessage", msg);
+            io.to(userId).emit("messageDelivered", msg._id);
         } catch (error) {
-            console.error("Message error:", error);
+            console.error("Send message error:", error);
         }
     });
 
     /* 🔵 TYPING INDICATOR */
     socket.on("typing", ({ receiverId }) => {
-        socket.to(receiverId).emit("typing", {
-            senderId: socket.userId,
-        });
+        socket.to(receiverId).emit("typing", userId);
     });
 
     socket.on("stopTyping", ({ receiverId }) => {
         socket.to(receiverId).emit("stopTyping");
     });
 
+    socket.on("messageSeen", async ({ messageId, senderId }) => {
+        try {
+            await Message.findByIdAndUpdate(messageId, { status: "seen" });
+            io.to(senderId).emit("messageSeenUpdate", messageId);
+        } catch (error) {
+            console.error("Seen update error:", error);
+        }
+    });
+
+    socket.on("editMessage", async ({ messageId, newText }) => {
+        try {
+            const updated = await Message.findByIdAndUpdate(
+                messageId,
+                { message: newText },
+                { new: true }
+            );
+
+            if (!updated) return;
+
+            io.to(updated.receiverId).emit("messageEdited", updated);
+            io.to(updated.senderId).emit("messageEdited", updated);
+        } catch (error) {
+            console.error("Edit message error:", error);
+        }
+    });
+
+    socket.on("deleteMessage", async ({ messageId }) => {
+        try {
+            const deletedMessage = await Message.findByIdAndUpdate(
+                messageId,
+                {
+                    isDeleted: true,
+                    message: "This message was deleted",
+                },
+                { new: true }
+            );
+
+            if (!deletedMessage) return;
+
+            io.to(deletedMessage.receiverId).emit("messageDeleted", messageId);
+            io.to(deletedMessage.senderId).emit("messageDeleted", messageId);
+        } catch (error) {
+            console.error("Delete message error:", error);
+        }
+    });
+
     socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.userId);
+        onlineUsers.delete(userId);
+        io.emit("onlineUsers", Array.from(onlineUsers));
+        console.log("User disconnected:", userId);
     });
 });
 
