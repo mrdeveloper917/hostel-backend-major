@@ -7,13 +7,38 @@ import { findRoomByStudentDetails, syncStudentRoom } from "../utils/roomSync.js"
 
 const router = express.Router();
 
+const parsePreferredRoomPayload = (body = {}) => {
+    const preferredBlock = (
+        body.preferredBlock ||
+        body.block ||
+        body.preferredHostel ||
+        body.hostelName ||
+        ""
+    )
+        .toString()
+        .trim();
+
+    const floorValue =
+        body.preferredFloor ??
+        body.floor ??
+        body.floorNumber ??
+        body.preferredFloorNumber;
+    const preferredFloor = Number(floorValue);
+
+    const reason = (body.reason || body.message || body.description || "")
+        .toString()
+        .trim();
+
+    return { preferredBlock, preferredFloor, reason };
+};
+
 /* ================= STUDENT REQUEST ================= */
 router.post("/", protect, async (req, res) => {
     try {
-        const { preferredBlock, preferredFloor, reason } = req.body;
-        const parsedFloor = Number(preferredFloor);
+        const { preferredBlock, preferredFloor, reason } =
+            parsePreferredRoomPayload(req.body);
 
-        if (!preferredBlock || Number.isNaN(parsedFloor) || !reason?.trim()) {
+        if (!preferredBlock || Number.isNaN(preferredFloor) || !reason) {
             return res.status(400).json({
                 success: false,
                 message: "Preferred block, floor and reason are required",
@@ -28,20 +53,51 @@ router.post("/", protect, async (req, res) => {
             });
         }
 
-        if (!student.room) {
+        const existingPendingRequest = await RoomChangeRequest.findOne({
+            studentId: student._id,
+            status: "pending",
+        }).lean();
+
+        if (existingPendingRequest) {
+            return res.status(400).json({
+                success: false,
+                message: "You already have a pending room change request",
+            });
+        }
+
+        if (
+            student.hostelName?.trim() === preferredBlock &&
+            Number(student.floorNumber) === preferredFloor
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "You are already in the requested block and floor",
+            });
+        }
+
+        let currentRoomId = student.room || null;
+
+        if (!currentRoomId) {
             const matchedRoom = await findRoomByStudentDetails(student);
+            currentRoomId = matchedRoom?._id || null;
+
             if (matchedRoom) {
-                await syncStudentRoom(student);
-                await student.save();
+                try {
+                    await syncStudentRoom(student);
+                    await student.save();
+                    currentRoomId = student.room || matchedRoom._id;
+                } catch (syncError) {
+                    console.error("Room sync warning:", syncError.message);
+                }
             }
         }
 
         const request = await RoomChangeRequest.create({
             studentId: req.user._id,
-            currentRoom: student.room || null,
-            preferredBlock: preferredBlock.trim(),
-            preferredFloor: parsedFloor,
-            reason: reason.trim(),
+            currentRoom: currentRoomId,
+            preferredBlock,
+            preferredFloor,
+            reason,
             status: "pending",
         });
 
@@ -50,7 +106,7 @@ router.post("/", protect, async (req, res) => {
         console.error("Room change create error:", error);
         res.status(500).json({
             success: false,
-            message: "Room change request failed",
+            message: error.message || "Room change request failed",
         });
     }
 });
@@ -112,8 +168,12 @@ router.put("/:id/approve", protect, adminOnly, async (req, res) => {
         if (!student.room) {
             const matchedRoom = await findRoomByStudentDetails(student);
             if (matchedRoom) {
-                await syncStudentRoom(student);
-                await student.save();
+                try {
+                    await syncStudentRoom(student);
+                    await student.save();
+                } catch (syncError) {
+                    console.error("Room sync warning:", syncError.message);
+                }
             }
         }
 
@@ -137,7 +197,9 @@ router.put("/:id/approve", protect, adminOnly, async (req, res) => {
             await oldRoom.save();
         }
 
-        newRoom.occupants.push(student._id);
+        if (!newRoom.occupants.some((id) => id.toString() === student._id.toString())) {
+            newRoom.occupants.push(student._id);
+        }
         newRoom.status =
             newRoom.occupants.length >= newRoom.capacity ? "full" : "available";
         await newRoom.save();
