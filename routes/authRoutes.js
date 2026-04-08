@@ -5,6 +5,7 @@ import fs from "fs";
 import { register, login } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
+import { syncStudentRoom } from "../utils/roomSync.js";
 
 const router = express.Router();
 
@@ -149,6 +150,7 @@ router.put(
         user.profileImage = buildProfileImageUrl(req, req.file);
       }
 
+      await syncStudentRoom(user);
       await user.save();
 
       res.json({

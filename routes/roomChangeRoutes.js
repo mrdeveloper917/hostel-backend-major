@@ -3,6 +3,7 @@ import RoomChangeRequest from "../models/RoomChangeRequest.js";
 import Room from "../models/Room.js";
 import User from "../models/User.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { findRoomByStudentDetails, syncStudentRoom } from "../utils/roomSync.js";
 
 const router = express.Router();
 
@@ -19,9 +20,25 @@ router.post("/", protect, async (req, res) => {
             });
         }
 
+        const student = await User.findById(req.user._id);
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: "Student not found",
+            });
+        }
+
+        if (!student.room) {
+            const matchedRoom = await findRoomByStudentDetails(student);
+            if (matchedRoom) {
+                await syncStudentRoom(student);
+                await student.save();
+            }
+        }
+
         const request = await RoomChangeRequest.create({
             studentId: req.user._id,
-            currentRoom: req.user.room || null,
+            currentRoom: student.room || null,
             preferredBlock: preferredBlock.trim(),
             preferredFloor: parsedFloor,
             reason: reason.trim(),
@@ -85,6 +102,20 @@ router.put("/:id/approve", protect, adminOnly, async (req, res) => {
             return res.json({ success: false });
 
         const student = await User.findById(request.studentId);
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: "Student not found",
+            });
+        }
+
+        if (!student.room) {
+            const matchedRoom = await findRoomByStudentDetails(student);
+            if (matchedRoom) {
+                await syncStudentRoom(student);
+                await student.save();
+            }
+        }
 
         const newRoom = await Room.findOne({
             block: request.preferredBlock,
@@ -112,6 +143,9 @@ router.put("/:id/approve", protect, adminOnly, async (req, res) => {
         await newRoom.save();
 
         student.room = newRoom._id;
+        student.hostelName = newRoom.block;
+        student.floorNumber = String(newRoom.floor);
+        student.roomNumber = newRoom.roomNumber;
         await student.save();
 
         request.status = "approved";

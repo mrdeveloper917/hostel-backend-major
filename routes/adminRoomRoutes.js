@@ -46,6 +46,9 @@ router.post("/assign", protect, adminOnly, async (req, res) => {
 
         /* ===== ASSIGN NEW ROOM ===== */
         student.room = room._id;
+        student.hostelName = room.block;
+        student.floorNumber = String(room.floor);
+        student.roomNumber = room.roomNumber;
         await student.save();
 
         room.occupants.push(student._id);
@@ -114,6 +117,9 @@ router.post("/manual-assign", protect, adminOnly, async (req, res) => {
 
         /* ===== ASSIGN NEW ROOM ===== */
         student.room = room._id;
+        student.hostelName = room.block;
+        student.floorNumber = String(room.floor);
+        student.roomNumber = room.roomNumber;
         await student.save();
 
         room.occupants.push(student._id);
@@ -161,6 +167,9 @@ router.post("/remove", protect, adminOnly, async (req, res) => {
         }
 
         student.room = null;
+        student.hostelName = "";
+        student.floorNumber = "";
+        student.roomNumber = "";
         await student.save();
 
         res.json({ message: "Student removed from room" });

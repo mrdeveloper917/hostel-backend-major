@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { syncStudentRoom } from "../utils/roomSync.js";
 
 /* ================= REGISTER ================= */
 
@@ -88,6 +89,9 @@ export const register = async (req, res) => {
 
       phone,
     });
+
+    await syncStudentRoom(user);
+    await user.save();
 
     const userData = user.toObject();
     delete userData.password;

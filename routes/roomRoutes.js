@@ -2,6 +2,7 @@ import express from "express";
 import Room from "../models/Room.js";
 import User from "../models/User.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { findRoomByStudentDetails, syncStudentRoom } from "../utils/roomSync.js";
 
 const router = express.Router();
 
@@ -22,11 +23,21 @@ router.get("/", protect, adminOnly, async (req, res) => {
 /* ================= GET MY ROOM (STUDENT) ================= */
 router.get("/my-room", protect, async (req, res) => {
     try {
-        const room = req.user.room
-            ? await Room.findById(req.user.room)
-                  .populate("occupants", "name email")
-                  .lean()
+        const student = await User.findById(req.user._id);
+        let room = student?.room
+            ? await Room.findById(student.room).populate("occupants", "name email").lean()
             : null;
+
+        if (!room && student) {
+            const matchedRoom = await findRoomByStudentDetails(student);
+            if (matchedRoom) {
+                await syncStudentRoom(student);
+                await student.save();
+                room = await Room.findById(matchedRoom._id)
+                    .populate("occupants", "name email")
+                    .lean();
+            }
+        }
 
         res.json({ room: room || null });
     } catch (error) {
@@ -75,6 +86,9 @@ router.post("/assign", protect, adminOnly, async (req, res) => {
 
         /* ===== ASSIGN NEW ROOM ===== */
         student.room = room._id;
+        student.hostelName = room.block;
+        student.floorNumber = String(room.floor);
+        student.roomNumber = room.roomNumber;
         await student.save();
 
         room.occupants.push(student._id);
@@ -143,6 +157,9 @@ router.post("/manual-assign", protect, adminOnly, async (req, res) => {
 
         /* ===== ASSIGN NEW ROOM ===== */
         student.room = room._id;
+        student.hostelName = room.block;
+        student.floorNumber = String(room.floor);
+        student.roomNumber = room.roomNumber;
         await student.save();
 
         room.occupants.push(student._id);
@@ -190,6 +207,9 @@ router.post("/remove", protect, adminOnly, async (req, res) => {
         }
 
         student.room = null;
+        student.hostelName = "";
+        student.floorNumber = "";
+        student.roomNumber = "";
         await student.save();
 
         res.json({ message: "Student removed from room" });
@@ -203,11 +223,21 @@ router.post("/remove", protect, adminOnly, async (req, res) => {
 /* ================= GET MY ROOM ================= */
 router.get("/my", protect, async (req, res) => {
     try {
-        const room = req.user.room
-            ? await Room.findById(req.user.room)
-                  .populate("occupants", "name email")
-                  .lean()
+        const student = await User.findById(req.user._id);
+        let room = student?.room
+            ? await Room.findById(student.room).populate("occupants", "name email").lean()
             : null;
+
+        if (!room && student) {
+            const matchedRoom = await findRoomByStudentDetails(student);
+            if (matchedRoom) {
+                await syncStudentRoom(student);
+                await student.save();
+                room = await Room.findById(matchedRoom._id)
+                    .populate("occupants", "name email")
+                    .lean();
+            }
+        }
 
         res.json({ room: room || null });
     } catch (error) {
