@@ -8,6 +8,36 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
+const normalizeProfileImage = (profileImage = "") => {
+  if (!profileImage) return "";
+  if (profileImage.startsWith("http://") || profileImage.startsWith("https://")) {
+    return profileImage;
+  }
+
+  return `/${profileImage.replace(/^\/+/, "")}`;
+};
+
+const formatUserProfile = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  phone: user.phone || "",
+  hostelName: user.hostelName || "",
+  roomNumber: user.roomNumber || "",
+  floorNumber: user.floorNumber || "",
+  branch: user.branch || "",
+  course: user.course || "",
+  rollNo: user.rollNo || "",
+  profileImage: normalizeProfileImage(user.profileImage),
+  room: user.room || null,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const buildProfileImageUrl = (req, file) =>
+  `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+
 /* ================= MULTER SETUP ================= */
 
 const uploadDir = "uploads/";
@@ -112,15 +142,11 @@ router.put(
       if (req.body.floorNumber) user.floorNumber = req.body.floorNumber;
       if (req.body.branch) user.branch = req.body.branch;
       if (req.body.course) user.course = req.body.course;
+      if (req.body.rollNo) user.rollNo = req.body.rollNo;
 
       // 🖼️ Image update
       if (req.file) {
-        user.profileImage =
-          req.protocol +
-          "://" +
-          req.get("host") +
-          "/uploads/" +
-          req.file.filename;
+        user.profileImage = buildProfileImageUrl(req, req.file);
       }
 
       await user.save();
@@ -128,7 +154,7 @@ router.put(
       res.json({
         success: true,
         message: "Profile updated successfully",
-        user,
+        user: formatUserProfile(user),
       });
 
     } catch (error) {

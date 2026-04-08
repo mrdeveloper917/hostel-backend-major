@@ -7,6 +7,33 @@ import Fee from "../models/Fee.js";
 
 const router = express.Router();
 
+const normalizeProfileImage = (profileImage = "") => {
+    if (!profileImage) return "";
+    if (profileImage.startsWith("http://") || profileImage.startsWith("https://")) {
+        return profileImage;
+    }
+
+    return `/${profileImage.replace(/^\/+/, "")}`;
+};
+
+const formatStudentProfile = (student) => ({
+    _id: student._id,
+    name: student.name,
+    email: student.email,
+    role: student.role,
+    phone: student.phone || "",
+    hostelName: student.hostelName || "",
+    roomNumber: student.roomNumber || "",
+    floorNumber: student.floorNumber || "",
+    branch: student.branch || "",
+    course: student.course || "",
+    rollNo: student.rollNo || "",
+    profileImage: normalizeProfileImage(student.profileImage),
+    room: student.room || null,
+    createdAt: student.createdAt,
+    updatedAt: student.updatedAt,
+});
+
 /* ============================================================
    STUDENT DASHBOARD (STUDENT SIDE)
 ============================================================ */
@@ -15,7 +42,9 @@ router.get("/dashboard", protect, async (req, res) => {
         const currentMonth = new Date().toISOString().slice(0, 7);
         const [student, complaintCount, leaveCount, fee] = await Promise.all([
             User.findById(req.user.id)
-                .select("name email room profileImage")
+                .select(
+                    "name email role phone hostelName roomNumber floorNumber branch course rollNo room profileImage createdAt updatedAt"
+                )
                 .populate("room", "roomNumber floor block capacity")
                 .lean(),
             Complaint.countDocuments({
@@ -36,11 +65,7 @@ router.get("/dashboard", protect, async (req, res) => {
 
         res.json({
             user: {
-                _id: student._id,
-                name: student.name,
-                email: student.email,
-                profileImage: student.profileImage,
-                room: student.room || null,
+                ...formatStudentProfile(student),
                 complaints: complaintCount,
                 leaves: leaveCount,
                 fee: fee || null,
@@ -148,11 +173,17 @@ router.get("/", protect, adminOnly, async (req, res) => {
 router.get("/me", protect, async (req, res) => {
     try {
         const student = await User.findById(req.user.id)
-            .select("name email role room profileImage createdAt updatedAt")
+            .select(
+                "name email role phone hostelName roomNumber floorNumber branch course rollNo room profileImage createdAt updatedAt"
+            )
             .populate("room", "roomNumber floor block")
             .lean();
 
-        res.json({ student });
+        if (!student) {
+            return res.status(404).json({ message: "Profile not found" });
+        }
+
+        res.json({ student: formatStudentProfile(student) });
     } catch (error) {
         res.status(500).json({ message: "Profile fetch failed" });
     }

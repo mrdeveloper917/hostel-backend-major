@@ -25,7 +25,9 @@ export const register = async (req, res) => {
     } = req.body;
 
     // 🖼️ Image (multer)
-    const profileImage = req.file ? req.file.path : "";
+    const profileImage = req.file
+      ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
+      : "";
 
     /* BASIC VALIDATION */
     if (!name || !email || !password) {
@@ -87,10 +89,13 @@ export const register = async (req, res) => {
       phone,
     });
 
+    const userData = user.toObject();
+    delete userData.password;
+
     res.status(201).json({
       success: true,
       message: "User Registered Successfully",
-      user,
+      user: userData,
     });
 
   } catch (error) {
