@@ -26,6 +26,7 @@ import adminRoomRoutes from "./routes/adminRoomRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import roomChangeRoutes from "./routes/roomChangeRoutes.js";
+import { protect } from "./middleware/authMiddleware.js";
 
 /* 🔥 IMPORT MESSAGE MODEL */
 import Message from "./models/Message.js";
@@ -54,9 +55,9 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/room-change", roomChangeRoutes);
 
 /* ================= CHAT HISTORY API ================= */
-app.get("/api/messages/:receiverId", async (req, res) => {
+app.get("/api/messages/:receiverId", protect, async (req, res) => {
     try {
-        const userId = req.user?.id || req.headers.userid; // fallback
+        const userId = req.user.id;
         const { receiverId } = req.params;
 
         const messages = await Message.find({

@@ -189,4 +189,16 @@ router.get("/me", protect, async (req, res) => {
     }
 });
 
+router.get("/support-admins", protect, async (req, res) => {
+    try {
+        const admins = await User.find({ role: "admin" })
+            .select("name email role profileImage")
+            .lean();
+
+        res.json({ admins });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch admins" });
+    }
+});
+
 export default router;
