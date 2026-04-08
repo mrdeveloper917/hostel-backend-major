@@ -15,7 +15,7 @@ router.get("/dashboard", protect, async (req, res) => {
         const currentMonth = new Date().toISOString().slice(0, 7);
         const [student, complaintCount, leaveCount, fee] = await Promise.all([
             User.findById(req.user.id)
-                .select("name email room")
+                .select("name email room profileImage")
                 .populate("room", "roomNumber floor block capacity")
                 .lean(),
             Complaint.countDocuments({
@@ -39,6 +39,7 @@ router.get("/dashboard", protect, async (req, res) => {
                 _id: student._id,
                 name: student.name,
                 email: student.email,
+                profileImage: student.profileImage,
                 room: student.room || null,
                 complaints: complaintCount,
                 leaves: leaveCount,
@@ -90,7 +91,7 @@ router.get("/:id/leaves", protect, adminOnly, async (req, res) => {
 router.get("/", protect, adminOnly, async (req, res) => {
     try {
         const students = await User.find({ role: "student" })
-            .select("name email role room createdAt updatedAt")
+            .select("name email role room profileImage createdAt updatedAt")
             .populate("room", "roomNumber floor block")
             .lean();
 
@@ -147,7 +148,7 @@ router.get("/", protect, adminOnly, async (req, res) => {
 router.get("/me", protect, async (req, res) => {
     try {
         const student = await User.findById(req.user.id)
-            .select("name email role room createdAt updatedAt")
+            .select("name email role room profileImage createdAt updatedAt")
             .populate("room", "roomNumber floor block")
             .lean();
 

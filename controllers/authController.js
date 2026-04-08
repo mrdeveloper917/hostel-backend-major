@@ -15,18 +15,19 @@ export const register = async (req, res) => {
       role = "student",
       adminCode,
 
-      // optional fields
-      gender,
-      phone,
-      branch,
-      course,
-      rollNo,
       hostelName,
       roomNumber,
       floorNumber,
+      branch,
+      course,
+      rollNo,
+      phone,
     } = req.body;
 
-    /* validation */
+    // 🖼️ Image (multer)
+    const profileImage = req.file ? req.file.path : "";
+
+    /* BASIC VALIDATION */
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -34,7 +35,7 @@ export const register = async (req, res) => {
       });
     }
 
-    /* check existing user */
+    /* CHECK EXISTING USER */
     const userExists = await User.findOne({ email });
 
     if (userExists) {
@@ -44,7 +45,7 @@ export const register = async (req, res) => {
       });
     }
 
-    /* admin validation */
+    /* ADMIN VALIDATION */
     if (role === "admin") {
       if (adminCode !== process.env.ADMIN_SECRET_CODE) {
         return res.status(403).json({
@@ -54,23 +55,36 @@ export const register = async (req, res) => {
       }
     }
 
-    /* hash password */
+    /* STUDENT VALIDATION */
+    if (role === "student") {
+      if (!hostelName || !roomNumber || !branch) {
+        return res.status(400).json({
+          success: false,
+          message: "Hostel & academic details required for student",
+        });
+      }
+    }
+
+    /* HASH PASSWORD */
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    /* create user */
+    /* CREATE USER */
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
       role,
-      gender,
+
+      profileImage,
+
+      hostelName: role === "student" ? hostelName : undefined,
+      roomNumber: role === "student" ? roomNumber : undefined,
+      floorNumber: role === "student" ? floorNumber : undefined,
+      branch: role === "student" ? branch : undefined,
+      course: role === "student" ? course : undefined,
+      rollNo: role === "student" ? rollNo : undefined,
+
       phone,
-      branch,
-      course,
-      rollNo,
-      hostelName,
-      roomNumber,
-      floorNumber,
     });
 
     res.status(201).json({
@@ -97,7 +111,7 @@ export const login = async (req, res) => {
 
     const { email, password } = req.body;
 
-    /* validation */
+    /* VALIDATION */
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -105,7 +119,7 @@ export const login = async (req, res) => {
       });
     }
 
-    /* find user */
+    /* FIND USER */
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -115,7 +129,7 @@ export const login = async (req, res) => {
       });
     }
 
-    /* compare password */
+    /* PASSWORD CHECK */
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -125,7 +139,7 @@ export const login = async (req, res) => {
       });
     }
 
-    /* generate token */
+    /* TOKEN */
     const token = jwt.sign(
       {
         id: user._id,
@@ -135,16 +149,16 @@ export const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    /* remove password before sending */
+    /* REMOVE PASSWORD */
     const userData = user.toObject();
     delete userData.password;
 
-    /* FINAL RESPONSE */
+    /* RESPONSE */
     res.status(200).json({
       success: true,
       message: "Login successful",
-      token,          // 🔥 IMPORTANT (frontend ke liye)
-      user: userData, // 🔥 safe user data
+      token,
+      user: userData,
     });
 
   } catch (error) {

@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import multer from "multer";
-import path from "path";
+import fs from "fs";
 import { register, login } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
@@ -10,91 +10,180 @@ const router = express.Router();
 
 /* ================= MULTER SETUP ================= */
 
+const uploadDir = "uploads/";
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, "uploads/");
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname));
-    },
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const safeName = file.originalname.replace(/\s+/g, "-");
+    cb(null, `${Date.now()}-${safeName}`);
+  },
 });
 
-const upload = multer({ storage });
+const fileFilter = (req, file, cb) => {
+  if (!file.mimetype.startsWith("image/")) {
+    return cb(new Error("Only image files are allowed"));
+  }
+  cb(null, true);
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+});
 
 /* ================= AUTH ================= */
 
-router.post("/register", register);
+// 🔥 REGISTER WITH IMAGE
+router.post(
+  "/register",
+  (req, res, next) => {
+    upload.single("image")(req, res, (error) => {
+      if (error instanceof multer.MulterError) {
+        if (error.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(400)
+            .json({ message: "Image size must be 5MB or less" });
+        }
+        return res.status(400).json({ message: error.message });
+      }
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      next();
+    });
+  },
+  register
+);
+
+// 🔐 LOGIN
 router.post("/login", login);
 
-/* ================= UPDATE PROFILE (IMAGE + DATA) ================= */
+/* ================= UPDATE PROFILE ================= */
 
 router.put(
-    "/update-profile",
-    protect,
-    upload.single("image"),
-    async (req, res) => {
-        try {
-            console.log("BODY:", req.body);
-            console.log("FILE:", req.file);
-
-            const user = await User.findById(req.user._id);
-
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            if (req.body.name) user.name = req.body.name;
-            if (req.body.email) user.email = req.body.email;
-
-            if (req.file) {
-                user.profileImage =
-                    req.protocol +
-                    "://" +
-                    req.get("host") +
-                    "/uploads/" +
-                    req.file.filename;
-            }
-
-            await user.save();
-
-            res.json({ message: "Profile updated", user });
-
-        } catch (error) {
-            console.log("UPDATE ERROR:", error);
-            res.status(500).json({ message: "Update failed" });
+  "/update-profile",
+  protect,
+  (req, res, next) => {
+    upload.single("image")(req, res, (error) => {
+      if (error instanceof multer.MulterError) {
+        if (error.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(400)
+            .json({ message: "Image size must be 5MB or less" });
         }
+        return res.status(400).json({ message: error.message });
+      }
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id);
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // 📝 Update fields
+      if (req.body.name) user.name = req.body.name;
+      if (req.body.email) user.email = req.body.email;
+      if (req.body.phone) user.phone = req.body.phone;
+
+      // 🏠 Student fields
+      if (req.body.hostelName) user.hostelName = req.body.hostelName;
+      if (req.body.roomNumber) user.roomNumber = req.body.roomNumber;
+      if (req.body.floorNumber) user.floorNumber = req.body.floorNumber;
+      if (req.body.branch) user.branch = req.body.branch;
+      if (req.body.course) user.course = req.body.course;
+
+      // 🖼️ Image update
+      if (req.file) {
+        user.profileImage =
+          req.protocol +
+          "://" +
+          req.get("host") +
+          "/uploads/" +
+          req.file.filename;
+      }
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message: "Profile updated successfully",
+        user,
+      });
+
+    } catch (error) {
+      console.log("UPDATE ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Update failed",
+      });
     }
+  }
 );
 
 /* ================= CHANGE PASSWORD ================= */
 
 router.put("/change-password", protect, async (req, res) => {
-    try {
-        const { currentPassword, newPassword } = req.body;
+  try {
+    const { currentPassword, newPassword } = req.body;
 
-        const user = await User.findById(req.user._id);
-
-        if (!user)
-            return res.status(404).json({ message: "User not found" });
-
-        const isMatch = await bcrypt.compare(
-            currentPassword,
-            user.password
-        );
-
-        if (!isMatch)
-            return res
-                .status(400)
-                .json({ message: "Current password incorrect" });
-
-        user.password = await bcrypt.hash(newPassword, 10);
-        await user.save();
-
-        res.json({ message: "Password changed successfully" });
-
-    } catch (error) {
-        res.status(500).json({ message: "Password change failed" });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        message: "Both passwords are required",
+      });
     }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isMatch = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Current password incorrect",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Password changed successfully",
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Password change failed",
+    });
+  }
 });
 
 export default router;
