@@ -4,6 +4,12 @@ import User from "../models/User.js";
 import Complaint from "../models/Complaint.js";
 import Leave from "../models/Leave.js";
 import Fee from "../models/Fee.js";
+import Room from "../models/Room.js";
+import Attendance from "../models/Attendance.js";
+import Payment from "../models/Payment.js";
+import RoomChangeRequest from "../models/RoomChangeRequest.js";
+import Message from "../models/Message.js";
+import { deleteUserByAdmin } from "../controllers/adminUserController.js";
 
 const router = express.Router();
 
@@ -108,6 +114,8 @@ router.get("/:id/leaves", protect, adminOnly, async (req, res) => {
         res.status(500).json({ message: "Failed to fetch leaves" });
     }
 });
+
+router.delete("/:id", protect, adminOnly, deleteUserByAdmin);
 
 /* ============================================================
    GET ALL STUDENTS (ADMIN SIDE)

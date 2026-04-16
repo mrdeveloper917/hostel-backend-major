@@ -23,6 +23,7 @@ import adminFeeRoutes from "./routes/adminFeeRoutes.js";
 import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import leaveRoutes from "./routes/leaveRoutes.js";
 import adminRoomRoutes from "./routes/adminRoomRoutes.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import roomChangeRoutes from "./routes/roomChangeRoutes.js";
@@ -34,6 +35,7 @@ import Message from "./models/Message.js";
 /* ================= APP INIT ================= */
 const app = express();
 
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
@@ -48,6 +50,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/razorpay", razorpayRoutes);
 app.use("/api/admin/fees", adminFeeRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin", adminUserRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/admin/rooms", adminRoomRoutes);
 app.use("/api", announcementRoutes);

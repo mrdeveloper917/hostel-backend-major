@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { syncStudentRoom } from "../utils/roomSync.js";
+import { buildPublicFileUrl } from "../utils/url.js";
 
 /* ================= REGISTER ================= */
 
@@ -27,7 +28,7 @@ export const register = async (req, res) => {
 
     // 🖼️ Image (multer)
     const profileImage = req.file
-      ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
+      ? buildPublicFileUrl(req, `uploads/${req.file.filename}`)
       : "";
 
     /* BASIC VALIDATION */

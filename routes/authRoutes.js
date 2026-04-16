@@ -6,6 +6,7 @@ import { register, login } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
 import { syncStudentRoom } from "../utils/roomSync.js";
+import { buildPublicFileUrl } from "../utils/url.js";
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ const formatUserProfile = (user) => ({
 });
 
 const buildProfileImageUrl = (req, file) =>
-  `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+  buildPublicFileUrl(req, `uploads/${file.filename}`);
 
 /* ================= MULTER SETUP ================= */
 

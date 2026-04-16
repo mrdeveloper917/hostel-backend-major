@@ -103,4 +103,27 @@ router.put("/:id", protect, adminOnly, async (req, res) => {
     }
 });
 
+router.delete("/:id", protect, async (req, res) => {
+    try {
+        const complaint = await Complaint.findById(req.params.id);
+
+        if (!complaint) {
+            return res.status(404).json({ message: "Complaint not found" });
+        }
+
+        const isAdmin = req.user.role === "admin";
+        const isOwner = complaint.student.toString() === req.user.id;
+
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({ message: "Not allowed to delete this complaint" });
+        }
+
+        await complaint.deleteOne();
+
+        res.json({ message: "Complaint deleted" });
+    } catch (error) {
+        res.status(500).json({ message: "Delete failed" });
+    }
+});
+
 export default router;

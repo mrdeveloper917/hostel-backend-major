@@ -15,14 +15,32 @@ router.post("/scan", protect, async (req, res) => {
     try {
         const { studentId } = req.body;
 
+        if (!studentId) {
+            return res.status(400).json({ message: "studentId is required" });
+        }
+
+        const student = await User.findById(studentId).select("_id role name");
+
+        if (!student || student.role !== "student") {
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        const lastRecord = await Attendance.findOne({ studentId }).sort({
+            createdAt: -1,
+        });
+
+        const nextType = lastRecord?.type === "entry" ? "exit" : "entry";
+
         const attendance = await Attendance.create({
-            student: studentId,
-            date: new Date(),
+            studentId,
+            type: nextType,
+            scannedBy: req.user._id,
+            timestamp: new Date(),
         });
 
         res.json({
             success: true,
-            message: "Attendance recorded",
+            message: `${nextType === "entry" ? "Entry" : "Exit"} recorded`,
             attendance,
         });
     } catch (error) {
@@ -36,8 +54,8 @@ router.post("/scan", protect, async (req, res) => {
 router.get("/my", protect, async (req, res) => {
     try {
         const records = await Attendance.find({
-            student: req.user._id,
-        }).sort({ date: -1 });
+            studentId: req.user._id,
+        }).sort({ createdAt: -1 });
 
         res.json({ records });
     } catch (error) {
