@@ -1,47 +1,40 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
-{
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-
-  // 🖼️ Profile Image
-  profileImage: { type: String, default: "" },
-
-  // 👤 Role
-  role: {
-    type: String,
-    enum: ["admin", "student"],
-    default: "student",
+  {
+    name: { type: String, required: true, trim: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
+    password: { type: String, required: true },
+    profileImage: { type: String, default: "" },
+    role: {
+      type: String,
+      enum: ["admin", "student"],
+      default: "student",
+    },
+    hostelName: { type: String, trim: true },
+    roomNumber: { type: String, trim: true },
+    floorNumber: { type: String, trim: true },
+    branch: { type: String, trim: true },
+    course: { type: String, trim: true },
+    rollNo: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    isSuperAdmin: { type: Boolean, default: false },
+    room: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+    },
+    resetOTP: { type: String, default: undefined },
+    otpExpiry: { type: Date, default: undefined },
   },
-
-  // 🏠 Hostel Details (ONLY for students)
-  hostelName: { type: String },
-  roomNumber: { type: String },
-  floorNumber: { type: String },
-
-  // 🎓 Academic Details (student)
-  branch: { type: String },
-  course: { type: String },
-  rollNo: { type: String },
-
-  // 📞 Extra
-  phone: { type: String },
-
-  // 🔥 Admin Features
-  isSuperAdmin: { type: Boolean, default: false },
-
-  // 🔗 Room Reference
-  room: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Room",
-  },
-},
-{ timestamps: true }
+  { timestamps: true }
 );
 
-// Indexes
 userSchema.index({ role: 1 });
 userSchema.index({ room: 1 });
 
